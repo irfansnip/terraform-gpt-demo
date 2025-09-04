@@ -1,20 +1,20 @@
+import requests
 from dotenv import load_dotenv
 import os
 import subprocess
-import requests
+import json
 
-# Load OpenAI key
 load_dotenv()
 api_key = os.environ["OPENAI_API_KEY"]
 
-# Run terraform plan locally
+# Run Terraform plan (you already did this, just making sure)
 subprocess.run("terraform init -input=false -no-color", shell=True, check=True)
 subprocess.run("terraform plan -out=tfplan.bin -no-color", shell=True, check=True)
 
-# Convert plan to JSON
+# Get JSON of plan
 plan_json = subprocess.check_output("terraform show -json tfplan.bin", shell=True)
 
-# Prepare GPT prompt
+# Prepare prompt
 prompt = f"""
 Summarize this Terraform plan.
 Sections:
@@ -27,13 +27,26 @@ Plan JSON (truncated):
 {plan_json[:8000]}
 """
 
-# Call GPT API
-resp = requests.post(
-    "https://api.openai.com/v1/responses",
-    headers={"Authorization": f"Bearer {api_key}",
-             "Content-Type": "application/json"},
-    json={"model": "gpt-4o-mini", "input": prompt}
-)
+# OpenAI API call
+headers = {
+    "Authorization": f"Bearer {api_key}",
+    "Content-Type": "application/json"
+}
 
-# Print GPT summary
-print(resp.json()["output_text"])
+data = {
+    "model": "gpt-4o-mini",
+    "input": prompt
+}
+
+response = requests.post("https://api.openai.com/v1/responses", headers=headers, data=json.dumps(data))
+
+resp_json = response.json()
+
+# The correct way to get output text from the new Responses API
+# It may be nested under resp_json['output'][0]['content'][0]['text']
+try:
+    output_text = resp_json["output"][0]["content"][0]["text"]
+    print(output_text)
+except (KeyError, IndexError):
+    print("Error: Could not extract text from OpenAI response")
+    print(json.dumps(resp_json, indent=2))
